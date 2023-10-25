@@ -1,20 +1,74 @@
-import streamlit as st
-from transformers import AutoModelForCausalLM, AutoTokenizer
+import openai
 
-# Laden des Modells und des Tokenizers
-tokenizer = AutoTokenizer.from_pretrained("gpt2-medium")
-model = AutoModelForCausalLM.from_pretrained("gpt2-medium")
+# Set up OpenAI API key
+api_key = "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"
+openai.api_key = api_key
 
-st.title("Chatbot mit Huggingface und Streamlit")
+# Function to send a message to the OpenAI chatbot model and return its response
+def send_message(message_log):
+    # Use OpenAI's ChatCompletion API to get the chatbot's response
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # The name of the OpenAI chatbot model to use
+        messages=message_log,   # The conversation history up to this point, as a list of dictionaries
+        max_tokens=3800,        # The maximum number of tokens (words or subwords) in the generated response
+        stop=None,              # The stopping sequence for the generated response, if any (not used here)
+        temperature=0.7,        # The "creativity" of the generated response (higher temperature = more creative)
+    )
 
-# Input und Output Textareas
-input_text = st.text_area("Du:", "")
-output_text = ""
+    # Find the first response from the chatbot that has text in it (some responses may not have text)
+    for choice in response.choices:
+        if "text" in choice:
+            return choice.text
 
-if st.button("Antworten"):
-    # Codieren der Eingabe und Generieren einer Antwort
-    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
-    output_ids = model.generate(input_ids, max_length=150, pad_token_id=tokenizer.eos_token_id)
-    output_text = tokenizer.decode(output_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
+    # If no response with text is found, return the first response's content (which may be empty)
+    return response.choices[0].message.content
 
-st.text_area("Chatbot:", value=output_text, disabled=True)
+
+# Main function that runs the chatbot
+def main():
+    # Initialize the conversation history with a message from the chatbot
+    message_log = [
+        {"role": "system", "content": "You are a helpful assistant."}
+    ]
+
+    # Set a flag to keep track of whether this is the first request in the conversation
+    first_request = True
+
+    # Start a loop that runs until the user types "quit"
+    while True:
+        if first_request:
+            # If this is the first request, get the user's input and add it to the conversation history
+            user_input = input("You: ")
+            message_log.append({"role": "user", "content": user_input})
+
+            # Send the conversation history to the chatbot and get its response
+            response = send_message(message_log)
+
+            # Add the chatbot's response to the conversation history and print it to the console
+            message_log.append({"role": "assistant", "content": response})
+            print(f"AI assistant: {response}")
+
+            # Set the flag to False so that this branch is not executed again
+            first_request = False
+        else:
+            # If this is not the first request, get the user's input and add it to the conversation history
+            user_input = input("You: ")
+
+            # If the user types "quit", end the loop and print a goodbye message
+            if user_input.lower() == "quit":
+                print("Goodbye!")
+                break
+
+            message_log.append({"role": "user", "content": user_input})
+
+            # Send the conversation history to the chatbot and get its response
+            response = send_message(message_log)
+
+            # Add the chatbot's response to the conversation history and print it to the console
+            message_log.append({"role": "assistant", "content": response})
+            print(f"AI assistant: {response}")
+
+
+# Call the main function if this file is executed directly (not imported as a module)
+if __name__ == "__main__":
+    main()
