@@ -1,55 +1,20 @@
 import streamlit as st
-from hugchat import hugchat
-from hugchat.login import Login
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
-# App title
-st.set_page_config(page_title="🤗💬 HugChat")
+# Laden des Modells und des Tokenizers
+tokenizer = AutoTokenizer.from_pretrained("gpt2-medium")
+model = AutoModelForCausalLM.from_pretrained("gpt2-medium")
 
-# Hugging Face Credentials
-with st.sidebar:
-    st.title('🤗💬 HugChat')
-    if ('EMAIL' in st.secrets) and ('PASS' in st.secrets):
-        st.success('HuggingFace Login credentials already provided!', icon='✅')
-        hf_email = st.secrets['EMAIL']
-        hf_pass = st.secrets['PASS']
-    else:
-        hf_email = st.text_input('Enter E-mail:', type='password')
-        hf_pass = st.text_input('Enter password:', type='password')
-        if not (hf_email and hf_pass):
-            st.warning('Please enter your credentials!', icon='⚠️')
-        else:
-            st.success('Proceed to entering your prompt message!', icon='👉')
-    st.markdown('📖 Learn how to build this app in this [blog](https://blog.streamlit.io/how-to-build-an-llm-powered-chatbot-with-streamlit/)!')
-    
-# Store LLM generated responses
-if "messages" not in st.session_state.keys():
-    st.session_state.messages = [{"role": "assistant", "content": "How may I help you?"}]
+st.title("Chatbot mit Huggingface und Streamlit")
 
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+# Input und Output Textareas
+input_text = st.text_area("Du:", "")
+output_text = ""
 
-# Function for generating LLM response
-def generate_response(prompt_input, email, passwd):
-    # Hugging Face Login
-    sign = Login(email, passwd)
-    cookies = sign.login()
-    # Create ChatBot                        
-    chatbot = hugchat.ChatBot(cookies=cookies.get_dict())
-    return chatbot.chat(prompt_input)
+if st.button("Antworten"):
+    # Codieren der Eingabe und Generieren einer Antwort
+    input_ids = tokenizer.encode(input_text + tokenizer.eos_token, return_tensors="pt")
+    output_ids = model.generate(input_ids, max_length=150, pad_token_id=tokenizer.eos_token_id)
+    output_text = tokenizer.decode(output_ids[:, input_ids.shape[-1]:][0], skip_special_tokens=True)
 
-# User-provided prompt
-if prompt := st.chat_input(disabled=not (hf_email and hf_pass)):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
-
-# Generate a new response if last message is not from assistant
-if st.session_state.messages[-1]["role"] != "assistant":
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            response = generate_response(prompt, hf_email, hf_pass) 
-            st.write(response) 
-    message = {"role": "assistant", "content": response}
-    st.session_state.messages.append(message)
+st.text_area("Chatbot:", value=output_text, disabled=True)
